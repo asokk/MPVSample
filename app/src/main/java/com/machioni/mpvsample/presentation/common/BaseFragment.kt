@@ -5,8 +5,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.GenericLifecycleObserver
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.machioni.mpvsample.common.rx.DisposableHolder
 import com.machioni.mpvsample.common.rx.DisposableHolderDelegate
 import io.reactivex.BackpressureStrategy
@@ -25,7 +26,11 @@ abstract class BaseFragment : Fragment(), BackButtonListener, DisposableHolder b
     val lifecycleSubject = BehaviorSubject.create<Lifecycle.Event>()
 
     init {
-        lifecycle.addObserver(GenericLifecycleObserver { _, event -> lifecycleSubject.onNext(event) })
+        lifecycle.addObserver(object : LifecycleEventObserver {
+            override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                lifecycleSubject.onNext(event)
+            }
+        })
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -52,7 +57,6 @@ abstract class BaseFragment : Fragment(), BackButtonListener, DisposableHolder b
     }
 
 
-
     override fun onBackPressed(): Boolean {
         router.exit()
         return true
@@ -60,7 +64,7 @@ abstract class BaseFragment : Fragment(), BackButtonListener, DisposableHolder b
 
     fun <T> Flowable<T>.delayUntilActive(): Flowable<T> {
         return this.onErrorResumeNext { error: Throwable ->
-            Flowable.error<T>(error).delaySubscription (
+            Flowable.error<T>(error).delaySubscription(
                     lifecycleSubject.toFlowable(BackpressureStrategy.LATEST).filter { it.isActive }
             )
         }.delay { lifecycleSubject.toFlowable(BackpressureStrategy.LATEST).filter { it.isActive } }
